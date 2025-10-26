@@ -1,0 +1,28 @@
+# Qt Creator
+*.autosave
+*.pro.user
+*.pro.user.*
+
+# Build directories
+build-*/
+*.build
+Debug/
+Release/
+*.app
+*.exe
+
+# Qt
+Makefile*
+*.o
+*.a
+moc_*
+qrc_*
+ui_*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
