@@ -124,7 +124,7 @@ void Database::populateTestData()
 
 QSqlQuery Database::getMessagesQuery(int offset, int limit)
 {
-    QSqlQuery query(m_db); // Указываем явно базу данных
+    QSqlQuery query(m_db);
 
     QString queryString = QString(
         "SELECT sender, timestamp, text FROM messages "

@@ -31,16 +31,16 @@ QVariant MessageModel::data(const QModelIndex &index, int role) const
         QVariant text = QSqlQueryModel::data(createIndex(row, 2), Qt::DisplayRole);
         return sender.toString() + ": " + text.toString();
     }
-    case Qt::UserRole: // sender
+    case Qt::UserRole:
         return QSqlQueryModel::data(createIndex(row, 0), Qt::DisplayRole);
-    case Qt::UserRole + 1: { // timestamp
+    case Qt::UserRole + 1: {
         QVariant timestamp = QSqlQueryModel::data(createIndex(row, 1), Qt::DisplayRole);
         if (timestamp.userType() == QMetaType::QDateTime) {
             return timestamp.toDateTime().toString("dd.MM.yyyy hh:mm");
         }
         return timestamp.toString();
     }
-    case Qt::UserRole + 2: // text
+    case Qt::UserRole + 2:
         return QSqlQueryModel::data(createIndex(row, 2), Qt::DisplayRole);
     default:
         return QVariant();
@@ -64,7 +64,6 @@ void MessageModel::updateQuery()
         return;
     }
 
-    // Загружаем ВСЕ данные до текущего offset + pageSize
     QString sql = QString(
         "SELECT sender, timestamp, text FROM messages "
         "ORDER BY timestamp DESC "
