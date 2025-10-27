@@ -2,14 +2,15 @@
 #define MESSAGEMODEL_H
 
 
-#include <QAbstractListModel>
-#include <QStringList>
+#include <QSqlQueryModel>
+#include <QSqlQuery>
 #include <QVariant>
 #include <QModelIndex>
+#include <QtSql/QSqlDatabase>
 
 class Database;
 
-class MessageModel : public QAbstractListModel
+class MessageModel : public QSqlQueryModel
 {
     Q_OBJECT
 
@@ -19,7 +20,6 @@ public:
 
     void setDatabase(Database *db);
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
@@ -29,10 +29,13 @@ public slots:
 
 private:
     Database *m_database = nullptr;
-    QStringList m_messages;
+    QSqlDatabase m_dbConnection;
     int m_currentOffset = 0;
     const int m_pageSize = 20;
     bool m_hasMore = true;
+    int m_totalCount;
+
+    void updateQuery();
 };
 
 #endif // MESSAGEMODEL_H

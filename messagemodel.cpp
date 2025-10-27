@@ -1,43 +1,47 @@
 #include "messagemodel.h"
 #include "database.h"
+#include <QSqlRecord>
+#include <QDebug>
 
 MessageModel::MessageModel(QObject *parent)
-    : QAbstractListModel(parent)
+    : QSqlQueryModel(parent)
 {
 }
 
 void MessageModel::setDatabase(Database *db)
 {
     m_database = db;
+    if (db) {
+        m_dbConnection = QSqlDatabase::database();
+        m_totalCount = db->getTotalMessageCount();
+    }
     refresh();
-}
-
-int MessageModel::rowCount(const QModelIndex &parent) const
-{
-    Q_UNUSED(parent)
-    return m_messages.size();
 }
 
 QVariant MessageModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid() || index.row() < 0 || index.row() >= m_messages.size())
+    if (!index.isValid() || index.row() >= rowCount())
         return QVariant();
 
-    QString message = m_messages.at(index.row());
-    QStringList parts = message.split("|");
-
-    if (parts.size() < 3)
-        return QVariant();
+    int row = index.row();
 
     switch (role) {
-    case Qt::DisplayRole:
-        return parts[0] + ": " + parts[2];
-    case Qt::UserRole:
-        return parts[0];
-    case Qt::UserRole + 1:
-        return parts[1];
-    case Qt::UserRole + 2:
-        return parts[2];
+    case Qt::DisplayRole: {
+        QVariant sender = QSqlQueryModel::data(createIndex(row, 0), Qt::DisplayRole);
+        QVariant text = QSqlQueryModel::data(createIndex(row, 2), Qt::DisplayRole);
+        return sender.toString() + ": " + text.toString();
+    }
+    case Qt::UserRole: // sender
+        return QSqlQueryModel::data(createIndex(row, 0), Qt::DisplayRole);
+    case Qt::UserRole + 1: { // timestamp
+        QVariant timestamp = QSqlQueryModel::data(createIndex(row, 1), Qt::DisplayRole);
+        if (timestamp.userType() == QMetaType::QDateTime) {
+            return timestamp.toDateTime().toString("dd.MM.yyyy hh:mm");
+        }
+        return timestamp.toString();
+    }
+    case Qt::UserRole + 2: // text
+        return QSqlQueryModel::data(createIndex(row, 2), Qt::DisplayRole);
     default:
         return QVariant();
     }
@@ -53,36 +57,59 @@ QHash<int, QByteArray> MessageModel::roleNames() const
     return roles;
 }
 
+void MessageModel::updateQuery()
+{
+    if (!m_database) {
+        qWarning() << "Database not set!";
+        return;
+    }
+
+    // Загружаем ВСЕ данные до текущего offset + pageSize
+    QString sql = QString(
+        "SELECT sender, timestamp, text FROM messages "
+        "ORDER BY timestamp DESC "
+        "LIMIT %1"
+    ).arg(m_currentOffset + m_pageSize);
+
+    this->setQuery(sql, m_dbConnection);
+
+    if (this->lastError().isValid()) {
+        qWarning() << "Query error:" << this->lastError().text();
+    } else {
+        qDebug() << "Model updated, total rows:" << rowCount()
+                 << "current offset:" << m_currentOffset;
+    }
+}
+
 void MessageModel::loadMoreMessages()
 {
     if (!m_database || !m_hasMore)
         return;
 
-    QStringList newMessages = m_database->getMessages(m_currentOffset, m_pageSize);
-
-    if (newMessages.isEmpty()) {
+    if (m_currentOffset + m_pageSize >= m_totalCount) {
         m_hasMore = false;
+        qDebug() << "No more messages to load";
         return;
     }
 
-    beginInsertRows(QModelIndex(), m_messages.count(), m_messages.count() + newMessages.count() - 1);
-    m_messages.append(newMessages);
-    endInsertRows();
+    m_currentOffset += m_pageSize;
+    qDebug() << "Loading more messages, new offset:" << m_currentOffset;
 
-    m_currentOffset += newMessages.size();
+    updateQuery();
 
-    if (newMessages.size() < m_pageSize) {
+    if (m_currentOffset + m_pageSize >= m_totalCount) {
         m_hasMore = false;
+        qDebug() << "All messages loaded";
     }
 }
 
 void MessageModel::refresh()
 {
-    beginResetModel();
-    m_messages.clear();
     m_currentOffset = 0;
     m_hasMore = true;
-    endResetModel();
-
-    loadMoreMessages();
+    if (m_database) {
+        m_totalCount = m_database->getTotalMessageCount();
+    }
+    qDebug() << "Refreshing model, total messages:" << m_totalCount;
+    updateQuery();
 }

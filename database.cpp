@@ -24,6 +24,7 @@ bool Database::initDatabase()
 
     if (!m_db.open()) {
         qWarning() << "Database does not exists";
+
         createAndConnectDatabase();
     }
 
@@ -34,21 +35,32 @@ bool Database::initDatabase()
 void Database::createAndConnectDatabase()
 {
     QSqlDatabase adminDb = QSqlDatabase::addDatabase("QPSQL", "admin_connection");
-            adminDb.setHostName("localhost");
-            adminDb.setDatabaseName("postgres");
-            adminDb.setUserName("postgres");
-            adminDb.setPassword("1234");
-            adminDb.setPort(5432);
+    adminDb.setHostName("localhost");
+    adminDb.setDatabaseName("postgres");
+    adminDb.setUserName("postgres");
+    adminDb.setPassword("1234");
+    adminDb.setPort(5432);
 
-            if (adminDb.open()) {
-                QSqlQuery query(adminDb);
-                if (!query.exec("CREATE DATABASE message_db")) {
-                    qWarning() << "Failed to create database:" << query.lastError().text();
-                    return;
-                }
-                adminDb.close();
-                initDatabase();
-            }
+    if (!adminDb.open()) {
+        QString errorMessage = "Cannot connect to PostgreSQL. Возможные причины:\n"
+                              "- Server PostgreSQL not launch\n"
+                              "- Incorrect username or passowrd\n"
+                              "- Port 5432 blocked\n\n"
+                              "Error: " + adminDb.lastError().text();
+        qCritical() << errorMessage;
+        return;
+    }
+
+    QSqlQuery query(adminDb);
+    if (!query.exec("CREATE DATABASE message_db")) {
+        if (query.lastError().nativeErrorCode() != "42P04") {
+            QString errorMessage = "Cannot create database " + query.lastError().text();
+            qWarning() << errorMessage;
+        }
+    }
+
+    adminDb.close();
+    initDatabase();
 }
 
 void Database::createTables()
@@ -110,31 +122,25 @@ void Database::populateTestData()
     qDebug() << "Test data populated successfuly";
 }
 
-QStringList Database::getMessages(int offset, int limit)
+QSqlQuery Database::getMessagesQuery(int offset, int limit)
 {
-    QStringList messages;
+    QSqlQuery query(m_db); // Указываем явно базу данных
 
-    QSqlQuery query;
-    query.prepare("SELECT sender, timestamp, text FROM messages "
-                  "ORDER BY timestamp DESC "
-                  "LIMIT :limit OFFSET :offset");
-    query.bindValue(":limit", limit);
-    query.bindValue(":offset", offset);
+    QString queryString = QString(
+        "SELECT sender, timestamp, text FROM messages "
+        "ORDER BY timestamp DESC "
+        "LIMIT %1 OFFSET %2"
+    ).arg(limit).arg(offset);
 
-    if (!query.exec()) {
-        qWarning() <<"Failed to get messages: " << query.lastError().text();
-        return messages;
+    if (!query.exec(queryString)) {
+        qWarning() << "Failed to execute query:" << query.lastError().text();
+        qWarning() << "Query:" << queryString;
+    } else {
+        qDebug() << "Query executed, limit:" << limit << "offset:" << offset;
     }
 
-    while (query.next()) {
-            QString message = query.value(0).toString() + "|" +
-                             query.value(1).toDateTime().toString("dd.MM.yyyy hh:mm") + "|" +
-                             query.value(2).toString();
-            messages.append(message);
-        }
-
-        return messages;
-    }
+    return query;
+}
 
 int Database::getTotalMessageCount()
 {

@@ -19,7 +19,7 @@ public:
 
     bool initDatabase();
     void createAndConnectDatabase();
-    QStringList getMessages(int offset, int limit);
+    QSqlQuery getMessagesQuery(int offset, int limit);
     int getTotalMessageCount();
 
 private:
